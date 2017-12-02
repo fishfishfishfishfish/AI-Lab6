@@ -3,6 +3,20 @@ import random
 import math
 
 
+class NeuralNetwork(object):
+    def __init__(self, hidden_node, train_size):
+        self.WHidden = numpy.ones((hidden_node, train_size))
+        self.ThetaH = numpy.ones(hidden_node)
+        self.WOutput = numpy.ones(hidden_node)
+        self.ThetaO = 1
+
+    def print_nn(self):
+        print('w hidden:', self.WHidden)
+        print('bias hidden:', self.ThetaH)
+        print('w output:', self.WOutput)
+        print('bias output:', self.ThetaO)
+
+
 # 从文件读取训练数据
 def get_train_data(filename):
     """
@@ -73,18 +87,17 @@ def sigmoid(x):
     return 1/(1+math.e**(-x))
 
 
-def forward(x, w_hidden, w_output):
+def forward(x, nn):
     """
     :param x: numpy.array, input
-    :param w_hidden: numpy.matrix, hidden weight
-    :param w_output: numpy.array, output weight
-    :return: float, output
+    :param nn: NeuralNetwork: WHidden, ThetaH, WOutput, ThetaO
+    :return: float, output; array h
     """
-    h = w_hidden.dot(x)
-    print(h)
+    h = nn.WHidden.dot(x) + nn.ThetaH
     h = sigmoid(h)
-    print(h)
-    return h.dot(w_output)
+    o = h.dot(nn.WOutput) + nn.ThetaO
+    # o = sigmoid(o)
+    return o, h
 
 
 def backward(y, o, h, w_output):
@@ -100,31 +113,61 @@ def backward(y, o, h, w_output):
     return err_hidden, err_output
 
 
-def update_w(eta, w_output, w_hidden, err_output, err_hidden, h, x):
+def update_w(eta, nn, err_output, err_hidden, h, x):
     """
     :param eta: float, step length
-    :param w_output: array, weights from h to o
-    :param w_hidden: matrix, weights from x to h
+    :param nn: NeuralNetwork: WHidden, ThetaH, WOutput, ThetaO
     :param err_output: float, Err_output
     :param err_hidden: array, Err_hidden
     :param h: array, output of the hidden layer
     :param x: array, input x
     :return: next w_output, w_hidden
     """
-    w_output = w_output + eta*err_output*h
-    w_hidden = w_hidden + eta*numpy.outer(err_hidden, x)
-    return w_output, w_hidden
+    nn.WOutput = nn.WOutput + eta*err_output*h
+    nn.ThetaO = nn.ThetaO + eta*err_output
+    nn.WHidden = nn.WHidden + eta*numpy.outer(err_hidden, x)
+    nn.ThetaH = nn.ThetaH + eta*err_hidden
+    return nn
 
 
+def small_try():
+    x = numpy.array([1, 0, 1])
+    y = 1
+    eta = 0.9
+    nn = NeuralNetwork(2, 3)
+    nn.WHidden = numpy.array([[0.2, 0.4, -0.5], [-0.3, 0.1, 0.2]])
+    nn.ThetaH = numpy.array([-0.4, 0.2])
+    nn.WOutput = numpy.array([-0.3, -0.2])
+    nn.ThetaO = 0.1
+    o, h = forward(x, nn)
+    err_hidden, err_output = backward(y, o, h, nn.WOutput)
+    nn = update_w(eta, nn, err_output, err_hidden, h, x)
+    nn.print_nn()
 
-HiddenNodes = 3
+
+def train(x, y, nn, eta):
+    o, h = forward(x, nn)
+    error = ((o-y)**2)/2
+    err_hidden, err_output = backward(y, o, h, nn.WOutput)
+    nn = update_w(eta, nn, err_output, err_hidden, h, x)
+    return nn, error
+
+
+# small_try()
+HiddenNodes = 10
+Eta = 1
 Data = get_train_data("train.csv")
 Data = split_dataset(Data, 10)
 TrainData, ValData = get_train_and_val(Data, 1)
 TrainRow, TrainCol = TrainData.shape
 TrainCol -= 1
-WHidden = numpy.ones((HiddenNodes, TrainCol))
-WOutput = numpy.ones(HiddenNodes)
-NorTrainData = normalize(TrainData[:, 0:TrainCol])
-print(NorTrainData[0, :])
-print(forward(NorTrainData[0, :], WHidden, WOutput))
+TrainX = normalize(TrainData[:, 0:TrainCol])
+TrainY = TrainData[:, TrainCol]
+NN = NeuralNetwork(HiddenNodes, TrainCol)
+cnt = 0
+while cnt < 10000:
+    i = cnt % TrainRow
+    NN, Error = train(TrainX[i], TrainY[i], NN, Eta)
+    print(Error)
+    cnt += 1
+# print(forward(NorTrainData[0, :], WHidden, WOutput))
