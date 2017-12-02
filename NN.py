@@ -76,7 +76,7 @@ def sigmoid(x):
 def forward(x, w_hidden, w_output):
     """
     :param x: numpy.array, input
-    :param w_hidden: numpy.array, hidden weight
+    :param w_hidden: numpy.matrix, hidden weight
     :param w_output: numpy.array, output weight
     :return: float, output
     """
@@ -85,6 +85,36 @@ def forward(x, w_hidden, w_output):
     h = sigmoid(h)
     print(h)
     return h.dot(w_output)
+
+
+def backward(y, o, h, w_output):
+    """
+    :param y: float, the actual label
+    :param o: float, the forward output
+    :param h: array, the hidden output
+    :param w_output: array, the weights from h to o
+    :return: array[Err_hidden], Err_output
+    """
+    err_output = (y-o)*o*(1-o)
+    err_hidden = err_output*h*(1-h)*w_output
+    return err_hidden, err_output
+
+
+def update_w(eta, w_output, w_hidden, err_output, err_hidden, h, x):
+    """
+    :param eta: float, step length
+    :param w_output: array, weights from h to o
+    :param w_hidden: matrix, weights from x to h
+    :param err_output: float, Err_output
+    :param err_hidden: array, Err_hidden
+    :param h: array, output of the hidden layer
+    :param x: array, input x
+    :return: next w_output, w_hidden
+    """
+    w_output = w_output + eta*err_output*h
+    w_hidden = w_hidden + eta*numpy.outer(err_hidden, x)
+    return w_output, w_hidden
+
 
 
 HiddenNodes = 3
