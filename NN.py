@@ -1,14 +1,14 @@
 import numpy
-import random
+import matplotlib.pyplot as plt
 import math
 
 
 class NeuralNetwork(object):
     def __init__(self, hidden_node, train_size):
-        self.WHidden = numpy.ones((hidden_node, train_size))
-        self.ThetaH = numpy.ones(hidden_node)
-        self.WOutput = numpy.ones(hidden_node)
-        self.ThetaO = 1
+        self.WHidden = numpy.zeros((hidden_node, train_size))
+        self.ThetaH = numpy.zeros(hidden_node)
+        self.WOutput = numpy.zeros(hidden_node)
+        self.ThetaO = 0
 
     def print_nn(self):
         print('w hidden:', self.WHidden)
@@ -108,25 +108,43 @@ def backward(y, o, h, w_output):
     :param w_output: array, the weights from h to o
     :return: array[Err_hidden], Err_output
     """
-    err_output = (y-o)*o*(1-o)
+    err_output = (y-o)
     err_hidden = err_output*h*(1-h)*w_output
     return err_hidden, err_output
 
 
-def update_w(eta, nn, err_output, err_hidden, h, x):
+def batch(x_set, y_set, nn):
+    batch_size, col = x_set.shape
+    h_size = len(nn.ThetaH)
+    err_hidden = numpy.zeros((h_size, col))
+    err_output = numpy.zeros(h_size)
+    b_err_hidden = numpy.zeros(h_size)
+    b_err_output = 0
+    for xi in range(batch_size):
+        o, h = forward(x_set[xi], nn)
+        terr_hidden, terr_output = backward(y_set[xi], o, h, nn.WOutput)
+        err_output += terr_output * h
+        err_hidden += numpy.outer(terr_hidden, x_set[xi])
+        b_err_output += terr_output
+        b_err_hidden += terr_hidden
+    return err_hidden, err_output, b_err_hidden, b_err_output
+
+
+def update_w(eta, nn, err_hidden, err_output, b_err_hidden, b_err_output):
     """
     :param eta: float, step length
     :param nn: NeuralNetwork: WHidden, ThetaH, WOutput, ThetaO
-    :param err_output: float, Err_output
+    :param err_output: array, Err_output
     :param err_hidden: array, Err_hidden
     :param h: array, output of the hidden layer
     :param x: array, input x
     :return: next w_output, w_hidden
     """
-    nn.WOutput = nn.WOutput + eta*err_output*h
-    nn.ThetaO = nn.ThetaO + eta*err_output
-    nn.WHidden = nn.WHidden + eta*numpy.outer(err_hidden, x)
-    nn.ThetaH = nn.ThetaH + eta*err_hidden
+    h_size, col = nn.WHidden.shape
+    nn.WOutput = nn.WOutput + eta*err_output
+    nn.ThetaO = nn.ThetaO + eta*b_err_output*h_size
+    nn.WHidden = nn.WHidden + eta*err_hidden
+    nn.ThetaH = nn.ThetaH + eta*b_err_hidden*col
     return nn
 
 
@@ -145,29 +163,51 @@ def small_try():
     nn.print_nn()
 
 
-def train(x, y, nn, eta):
-    o, h = forward(x, nn)
-    error = ((o-y)**2)/2
-    err_hidden, err_output = backward(y, o, h, nn.WOutput)
-    nn = update_w(eta, nn, err_output, err_hidden, h, x)
-    return nn, error
+def train(x, y, nn, eta, batch_size):
+    row, col = x.shape
+    head = 0
+    tail = batch_size
+    while tail < row:
+        err_hidden, err_output, b_err_hidden, b_err_output = batch(x[head:tail], y[head:tail], nn)
+        nn = update_w(eta, nn, err_hidden, err_output, b_err_hidden, b_err_output)
+        head = tail
+        tail = head + batch_size
+    err_hidden, err_output, b_err_hidden, b_err_output = batch(x[head:row], y[head:row], nn)
+    nn = update_w(eta, nn, err_hidden, err_output, b_err_hidden, b_err_output)
+    return nn
+
+
+def loss(x, y, nn):
+    res = 0.0
+    for xi in range(len(x)):
+        pre, h = forward(x[xi], nn)
+        res += ((y[xi]-pre)**2)/2
+    return res/len(x)
 
 
 # small_try()
 HiddenNodes = 10
-Eta = 1
+Eta = 0.00000001
+BatchSize = 1000
 Data = get_train_data("train.csv")
 Data = split_dataset(Data, 10)
 TrainData, ValData = get_train_and_val(Data, 1)
 TrainRow, TrainCol = TrainData.shape
 TrainCol -= 1
-TrainX = normalize(TrainData[:, 0:TrainCol])
+TrainX = TrainData[:, 0:TrainCol]
 TrainY = TrainData[:, TrainCol]
 NN = NeuralNetwork(HiddenNodes, TrainCol)
 cnt = 0
-while cnt < 10000:
+mse = []
+while cnt < 5000:
     i = cnt % TrainRow
-    NN, Error = train(TrainX[i], TrainY[i], NN, Eta)
-    print(Error)
+    NN = train(TrainX, TrainY, NN, Eta, BatchSize)
+    # NN.print_nn()
+    mse.append(loss(TrainX, TrainY, NN))
+    if cnt % 100 == 0:
+        print(cnt)
     cnt += 1
+NN.print_nn()
+plt.plot(range(len(mse)), mse)
+plt.show()
 # print(forward(NorTrainData[0, :], WHidden, WOutput))
