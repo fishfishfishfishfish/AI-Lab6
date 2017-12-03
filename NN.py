@@ -209,7 +209,7 @@ def loss(x, y, nn):
     return res/len(x)
 
 
-def cal_val_corr(x, y, nn):
+def val(x, y, nn):
     pre = []
     row, col = x.shape
     for xi in range(row):
@@ -218,7 +218,7 @@ def cal_val_corr(x, y, nn):
     pre = numpy.array(pre)
     mul = y*pre
     res = (mul.mean()-pre.mean()*y.mean())/(pre.std()*y.std())
-    return res
+    return res, pre
 
 
 # small_try()
@@ -229,11 +229,13 @@ Data = get_train_data("train.csv")
 Data = split_dataset(Data, 10)
 TrainData, ValData = get_train_and_val(Data, 1)
 TrainRow, TrainCol = TrainData.shape
+ValRow, ValCol = ValData.shape
 TrainCol -= 1
+ValCol -= 1
 TrainX = TrainData[:, 0:TrainCol]
 TrainY = TrainData[:, TrainCol]
-ValX = ValData[:, 0:TrainCol]
-ValY = ValData[:, TrainCol]
+ValX = ValData[:, 0:ValCol]
+ValY = ValData[:, ValCol]
 NN = NeuralNetwork(HiddenNodes, TrainCol)
 cnt = 0
 mse = []
@@ -246,6 +248,10 @@ while cnt < 1500:
         print(cnt)
     cnt += 1
 NN.print_nn()
-print(cal_val_corr(ValX, ValY, NN))
+Corr, Pre = val(ValX, ValY, NN)
+print(Corr)
 plt.plot(range(len(mse)), mse)
+plt.show()
+plt.figure()
+plt.plot(range(ValRow), Pre, 'b-', range(ValRow), ValY, 'r-')
 plt.show()
