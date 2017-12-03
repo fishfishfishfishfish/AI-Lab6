@@ -209,9 +209,21 @@ def loss(x, y, nn):
     return res/len(x)
 
 
+def cal_val_corr(x, y, nn):
+    pre = []
+    row, col = x.shape
+    for xi in range(row):
+        tpre, h = forward(x[xi], nn)
+        pre.append(tpre)
+    pre = numpy.array(pre)
+    mul = y*pre
+    res = (mul.mean()-pre.mean()*y.mean())/(pre.std()*y.std())
+    return res
+
+
 # small_try()
 HiddenNodes = 10
-Eta = 0.000001
+Eta = 0.0000001
 BatchSize = 1000
 Data = get_train_data("train.csv")
 Data = split_dataset(Data, 10)
@@ -220,17 +232,20 @@ TrainRow, TrainCol = TrainData.shape
 TrainCol -= 1
 TrainX = TrainData[:, 0:TrainCol]
 TrainY = TrainData[:, TrainCol]
+ValX = ValData[:, 0:TrainCol]
+ValY = ValData[:, TrainCol]
 NN = NeuralNetwork(HiddenNodes, TrainCol)
 cnt = 0
 mse = []
-while cnt < 1500000:
+while cnt < 1500:
     i = cnt % TrainRow
-    NN = train(TrainX[i], TrainY[i], NN, Eta)
-    if cnt % 100 == 0:
+    # NN = train(TrainX[i], TrainY[i], NN, Eta)
+    NN = train_mini_batch(TrainX, TrainY, NN, Eta, BatchSize)
+    if cnt % 10 == 0:
         mse.append(loss(TrainX, TrainY, NN))
         print(cnt)
     cnt += 1
 NN.print_nn()
+print(cal_val_corr(ValX, ValY, NN))
 plt.plot(range(len(mse)), mse)
 plt.show()
-# print(forward(NorTrainData[0, :], WHidden, WOutput))
