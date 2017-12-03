@@ -130,21 +130,38 @@ def batch(x_set, y_set, nn):
     return err_hidden, err_output, b_err_hidden, b_err_output
 
 
-def update_w(eta, nn, err_hidden, err_output, b_err_hidden, b_err_output):
+def update_batch(eta, nn, err_hidden, err_output, b_err_hidden, b_err_output):
     """
     :param eta: float, step length
     :param nn: NeuralNetwork: WHidden, ThetaH, WOutput, ThetaO
     :param err_output: array, Err_output
     :param err_hidden: array, Err_hidden
-    :param h: array, output of the hidden layer
-    :param x: array, input x
-    :return: next w_output, w_hidden
+    :param b_err_hidden: array, Err_hidden for bias
+    :param b_err_output: float, Err_output for bias
+    :return: next neural network
     """
     h_size, col = nn.WHidden.shape
     nn.WOutput = nn.WOutput + eta*err_output
     nn.ThetaO = nn.ThetaO + eta*b_err_output*h_size
     nn.WHidden = nn.WHidden + eta*err_hidden
     nn.ThetaH = nn.ThetaH + eta*b_err_hidden*col
+    return nn
+
+
+def update_w(eta, nn, err_output, err_hidden, h, x):
+    """
+    :param eta: float, step length
+    :param nn: NeuralNetwork: WHidden, ThetaH, WOutput, ThetaO
+    :param err_output: float, Err_output
+    :param err_hidden: array, Err_hidden
+    :param h: array, output of the hidden layer
+    :param x: array, input x
+    :return: next w_output, w_hidden
+    """
+    nn.WOutput = nn.WOutput + eta*err_output*h
+    nn.ThetaO = nn.ThetaO + eta*err_output
+    nn.WHidden = nn.WHidden + eta*numpy.outer(err_hidden, x)
+    nn.ThetaH = nn.ThetaH + eta*err_hidden
     return nn
 
 
@@ -163,17 +180,24 @@ def small_try():
     nn.print_nn()
 
 
-def train(x, y, nn, eta, batch_size):
+def train(x, y, nn, eta):
+    o, h = forward(x, nn)
+    err_hidden, err_output = backward(y, o, h, nn.WOutput)
+    nn = update_w(eta, nn, err_output, err_hidden, h, x)
+    return nn
+
+
+def train_mini_batch(x, y, nn, eta, batch_size):
     row, col = x.shape
     head = 0
     tail = batch_size
     while tail < row:
         err_hidden, err_output, b_err_hidden, b_err_output = batch(x[head:tail], y[head:tail], nn)
-        nn = update_w(eta, nn, err_hidden, err_output, b_err_hidden, b_err_output)
+        nn = update_batch(eta, nn, err_hidden, err_output, b_err_hidden, b_err_output)
         head = tail
         tail = head + batch_size
     err_hidden, err_output, b_err_hidden, b_err_output = batch(x[head:row], y[head:row], nn)
-    nn = update_w(eta, nn, err_hidden, err_output, b_err_hidden, b_err_output)
+    nn = update_batch(eta, nn, err_hidden, err_output, b_err_hidden, b_err_output)
     return nn
 
 
@@ -187,7 +211,7 @@ def loss(x, y, nn):
 
 # small_try()
 HiddenNodes = 10
-Eta = 0.00000001
+Eta = 0.000001
 BatchSize = 1000
 Data = get_train_data("train.csv")
 Data = split_dataset(Data, 10)
@@ -199,12 +223,11 @@ TrainY = TrainData[:, TrainCol]
 NN = NeuralNetwork(HiddenNodes, TrainCol)
 cnt = 0
 mse = []
-while cnt < 5000:
+while cnt < 1500000:
     i = cnt % TrainRow
-    NN = train(TrainX, TrainY, NN, Eta, BatchSize)
-    # NN.print_nn()
-    mse.append(loss(TrainX, TrainY, NN))
+    NN = train(TrainX[i], TrainY[i], NN, Eta)
     if cnt % 100 == 0:
+        mse.append(loss(TrainX, TrainY, NN))
         print(cnt)
     cnt += 1
 NN.print_nn()
