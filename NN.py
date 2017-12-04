@@ -29,13 +29,12 @@ def get_train_data(filename):
         row = line.split(',')
         for i in range(len(row)):
             row[i] = float(row[i])
-        row.insert(0, 1)
         # row = numpy.array(row)
         data.append(row)
     return data
 
 
-# 将训练数据随机分成平均的几份
+# 将训练数据分成平均的几份
 def split_dataset(data, num):
     """
     :param data: list[list[float]], 原始的训练集
@@ -70,17 +69,23 @@ def get_train_and_val(dataset, n):
     return traindata, valdata
 
 
-def normalize(data):
-    mean_each_col = numpy.mean(data, axis=0)
-    std_each_col = numpy.std(data, axis=0)
+def normalize(train_data, val_data):
+    mean_each_col = numpy.mean(train_data, axis=0)
+    std_each_col = numpy.std(train_data, axis=0)
 
-    row, col = data.shape
-    data_t = data.copy()
-    for i in range(col):
-        if std_each_col[i] != 0:
-            data_t[:, i] -= mean_each_col[i]
-            data_t[:, i] /= std_each_col[i]
-    return data_t
+    row, col = train_data.shape
+    row, colv = val_data.shape
+    data_t = train_data.copy()
+    data_v = val_data.copy()
+    for ci in range(col):
+        if std_each_col[ci] != 0:
+            data_t[:, ci] -= mean_each_col[ci]
+            data_t[:, ci] /= std_each_col[ci]
+    for ci in range(colv):
+        if std_each_col[ci] != 0:
+            data_v[:, ci] -= mean_each_col[ci]
+            data_v[:, ci] /= std_each_col[ci]
+    return data_t, data_v
 
 
 def sigmoid(x):
@@ -114,6 +119,16 @@ def backward(y, o, h, w_output):
 
 
 def batch(x_set, y_set, nn):
+    """
+    :param x_set: matrix, the input x of one batch
+    :param y_set: array, the correct label of correlation x
+    :param nn: neural network
+    :return:
+        err_hidden: matrix, the gradient from input to hidden layer
+        err_output: array, the gradient from hidden layer to output
+        b_err_hidden: array, the gradient for bias from input to hidden layer
+        b_err_output: float, the gradient for bias from hidden layer to output
+    """
     batch_size, col = x_set.shape
     h_size = len(nn.ThetaH)
     err_hidden = numpy.zeros((h_size, col))
@@ -134,10 +149,10 @@ def update_batch(eta, nn, err_hidden, err_output, b_err_hidden, b_err_output):
     """
     :param eta: float, step length
     :param nn: NeuralNetwork: WHidden, ThetaH, WOutput, ThetaO
-    :param err_output: array, Err_output
-    :param err_hidden: array, Err_hidden
-    :param b_err_hidden: array, Err_hidden for bias
-    :param b_err_output: float, Err_output for bias
+    :param err_output: array, the gradient from hidden layer to output
+    :param err_hidden: matrix, the gradient from input to hidden layer
+    :param b_err_hidden: array, the gradient for bias from input to hidden layer
+    :param b_err_output: float, the gradient for bias from hidden layer to output
     :return: next neural network
     """
     h_size, col = nn.WHidden.shape
@@ -156,7 +171,7 @@ def update_w(eta, nn, err_output, err_hidden, h, x):
     :param err_hidden: array, Err_hidden
     :param h: array, output of the hidden layer
     :param x: array, input x
-    :return: next w_output, w_hidden
+    :return: next neural network
     """
     nn.WOutput = nn.WOutput + eta*err_output*h
     nn.ThetaO = nn.ThetaO + eta*err_output
@@ -166,28 +181,52 @@ def update_w(eta, nn, err_output, err_hidden, h, x):
 
 
 def small_try():
-    x = numpy.array([1, 0, 1])
-    y = 1
-    eta = 0.9
-    nn = NeuralNetwork(2, 3)
-    nn.WHidden = numpy.array([[0.2, 0.4, -0.5], [-0.3, 0.1, 0.2]])
-    nn.ThetaH = numpy.array([-0.4, 0.2])
-    nn.WOutput = numpy.array([-0.3, -0.2])
-    nn.ThetaO = 0.1
-    o, h = forward(x, nn)
-    err_hidden, err_output = backward(y, o, h, nn.WOutput)
-    nn = update_w(eta, nn, err_output, err_hidden, h, x)
+    data_set = get_train_data("small-train.csv")
+    data_set = numpy.array(data_set)
+    row, col = data_set.shape
+    col -= 1
+    x_set = data_set[:, 0:col]
+    y_set = data_set[:, col]
+    hidden_nodes = 2
+    nn = NeuralNetwork(hidden_nodes, col)
     nn.print_nn()
+    print('----------')
+    count = 0
+    while count < 7000:
+        ci = count%2
+        nn = train(x_set[ci], y_set[ci], nn, 1)
+        nn.print_nn()
+        print('------------')
+        count += 1
 
 
 def train(x, y, nn, eta):
+    """
+    :param x: array, input
+    :param y: float, the correct label of x
+    :param nn: formal neural network
+    :param eta: float, step length
+    :return: new neural network
+    """
     o, h = forward(x, nn)
+    # print('hidden:', h)
+    # print('output:', o)
     err_hidden, err_output = backward(y, o, h, nn.WOutput)
+    # print('error hidden:', err_hidden)
+    # print('error output:', err_output)
     nn = update_w(eta, nn, err_output, err_hidden, h, x)
     return nn
 
 
 def train_mini_batch(x, y, nn, eta, batch_size):
+    """
+    :param x: matrix, train set x
+    :param y: array, train set y
+    :param nn: neural network
+    :param eta: float, step length
+    :param batch_size: int, the number of feature vector of a batch
+    :return: next neural network
+    """
     row, col = x.shape
     head = 0
     tail = batch_size
@@ -202,6 +241,12 @@ def train_mini_batch(x, y, nn, eta, batch_size):
 
 
 def loss(x, y, nn):
+    """
+    :param x: matrix, input x
+    :param y: array, the correct label of correlated x
+    :param nn: neural network
+    :return: float, the loss
+    """
     res = 0.0
     for xi in range(len(x)):
         pre, h = forward(x[xi], nn)
@@ -210,6 +255,12 @@ def loss(x, y, nn):
 
 
 def val(x, y, nn):
+    """
+    :param x: matrix, input x
+    :param y: array, the correct label of correlated x
+    :param nn: neural network
+    :return:
+    """
     pre = []
     row, col = x.shape
     for xi in range(row):
@@ -224,7 +275,7 @@ def val(x, y, nn):
 # small_try()
 HiddenNodes = 10
 Eta = 0.0000001
-BatchSize = 1000
+BatchSize = 500
 Data = get_train_data("train.csv")
 Data = split_dataset(Data, 10)
 TrainData, ValData = get_train_and_val(Data, 1)
@@ -236,21 +287,24 @@ TrainX = TrainData[:, 0:TrainCol]
 TrainY = TrainData[:, TrainCol]
 ValX = ValData[:, 0:ValCol]
 ValY = ValData[:, ValCol]
+# TrainX, ValX = normalize(TrainX, ValX)
 NN = NeuralNetwork(HiddenNodes, TrainCol)
 cnt = 0
-mse = []
-while cnt < 1500:
+mse_t = []
+mse_v = []
+while cnt < 1500000:
     i = cnt % TrainRow
-    # NN = train(TrainX[i], TrainY[i], NN, Eta)
-    NN = train_mini_batch(TrainX, TrainY, NN, Eta, BatchSize)
-    if cnt % 10 == 0:
-        mse.append(loss(TrainX, TrainY, NN))
+    NN = train(TrainX[i], TrainY[i], NN, Eta)
+    # NN = train_mini_batch(TrainX, TrainY, NN, Eta, BatchSize)
+    if cnt % 100 == 0:
+        mse_t.append(loss(TrainX, TrainY, NN))
+        mse_v.append(loss(ValX, ValY, NN))
         print(cnt)
     cnt += 1
 NN.print_nn()
 Corr, Pre = val(ValX, ValY, NN)
 print(Corr)
-plt.plot(range(len(mse)), mse)
+plt.plot(range(len(mse_t)), mse_t, 'b-', range(len(mse_v)), mse_v, 'g-', )
 plt.show()
 plt.figure()
 plt.plot(range(ValRow), Pre, 'b-', range(ValRow), ValY, 'r-')
