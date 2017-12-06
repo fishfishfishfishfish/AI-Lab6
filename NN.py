@@ -5,10 +5,11 @@ import math
 
 class NeuralNetwork(object):
     def __init__(self, hidden_node, train_size):
-        self.WHidden = numpy.zeros((hidden_node, train_size))
-        self.ThetaH = numpy.zeros(hidden_node)
-        self.WOutput = numpy.zeros(hidden_node)
-        self.ThetaO = 0
+        numpy.random.seed(1)
+        self.WHidden = numpy.random.random((hidden_node, train_size))
+        self.ThetaH = numpy.random.random(hidden_node)
+        self.WOutput = numpy.random.random(hidden_node)
+        self.ThetaO = numpy.random.random()
 
     def print_nn(self):
         print('w hidden:', self.WHidden)
@@ -29,7 +30,6 @@ def get_train_data(filename):
         row = line.split(',')
         for i in range(len(row)):
             row[i] = float(row[i])
-        # row = numpy.array(row)
         data.append(row)
     return data
 
@@ -41,12 +41,13 @@ def split_dataset(data, num):
     :param num: int, 要分成的份数
     :return: list[list[list[float]], 分解后的num个数据集数组
     """
+    numpy.random.seed(10)
     data_list = []
     val_size = len(data) // num
     for k in range(num - 1):
         t_data = []
         for i in range(val_size):
-            t_data.append(data.pop(0))
+            t_data.append(data.pop(numpy.random.randint(0, len(data)-1)))
         data_list.append(t_data)
     data_list.append(data)
     return data_list
@@ -69,14 +70,16 @@ def get_train_and_val(dataset, n):
     return traindata, valdata
 
 
-def normalize(train_data, val_data):
+def normalize(train_data, val_data, test_data):
     mean_each_col = numpy.mean(train_data, axis=0)
     std_each_col = numpy.std(train_data, axis=0)
 
     row, col = train_data.shape
     row, colv = val_data.shape
+    row, coltx = test_data.shape
     data_t = train_data.copy()
     data_v = val_data.copy()
+    data_tx = test_data.copy()
     for ci in range(col):
         if std_each_col[ci] != 0:
             data_t[:, ci] -= mean_each_col[ci]
@@ -85,7 +88,11 @@ def normalize(train_data, val_data):
         if std_each_col[ci] != 0:
             data_v[:, ci] -= mean_each_col[ci]
             data_v[:, ci] /= std_each_col[ci]
-    return data_t, data_v
+    for ci in range(coltx):
+        if std_each_col[ci] != 0:
+            data_tx[:, ci] -= mean_each_col[ci]
+            data_tx[:, ci] /= std_each_col[ci]
+    return data_t, data_v, data_tx
 
 
 def sigmoid(x):
@@ -247,11 +254,12 @@ def loss(x, y, nn):
     :param nn: neural network
     :return: float, the loss
     """
-    res = 0.0
-    for xi in range(len(x)):
+    res = 0
+    row, col = x.shape
+    for xi in range(row):
         pre, h = forward(x[xi], nn)
         res += ((y[xi]-pre)**2)/2
-    return res/len(x)
+    return res/row
 
 
 def val(x, y, nn):
@@ -272,13 +280,23 @@ def val(x, y, nn):
     return res, pre
 
 
+def test(test_data, nn):
+    f = open("15352049_chenxinyu.csv", 'w')
+    row, col = test_data.shape
+    for xi in range(row):
+        o, h = forward(test_data[xi], nn)
+        f.write(str(o) + '\n')
+
+
 # small_try()
-HiddenNodes = 10
-Eta = 0.0000001
+HiddenNodes = 5
+Eta = 0.000001
 BatchSize = 500
 Data = get_train_data("train.csv")
+TestX = get_train_data("test.csv")
+TestX = numpy.array(TestX)
 Data = split_dataset(Data, 10)
-TrainData, ValData = get_train_and_val(Data, 1)
+TrainData, ValData = get_train_and_val(Data, 0)
 TrainRow, TrainCol = TrainData.shape
 ValRow, ValCol = ValData.shape
 TrainCol -= 1
@@ -287,19 +305,19 @@ TrainX = TrainData[:, 0:TrainCol]
 TrainY = TrainData[:, TrainCol]
 ValX = ValData[:, 0:ValCol]
 ValY = ValData[:, ValCol]
-# TrainX, ValX = normalize(TrainX, ValX)
+# TrainX, ValX, TestX = normalize(TrainX, ValX, TestX)
 NN = NeuralNetwork(HiddenNodes, TrainCol)
 cnt = 0
 mse_t = []
 mse_v = []
-while cnt < 1500000:
-    i = cnt % TrainRow
-    NN = train(TrainX[i], TrainY[i], NN, Eta)
+while cnt < 50000:
+    It = cnt % TrainRow
+    NN = train(TrainX[It], TrainY[It], NN, Eta)
     # NN = train_mini_batch(TrainX, TrainY, NN, Eta, BatchSize)
-    if cnt % 100 == 0:
+    if cnt % 10 == 0:
         mse_t.append(loss(TrainX, TrainY, NN))
         mse_v.append(loss(ValX, ValY, NN))
-        print(cnt)
+        print(cnt, mse_t[len(mse_t)-1], mse_v[len(mse_v)-1])
     cnt += 1
 NN.print_nn()
 Corr, Pre = val(ValX, ValY, NN)
@@ -309,3 +327,4 @@ plt.show()
 plt.figure()
 plt.plot(range(ValRow), Pre, 'b-', range(ValRow), ValY, 'r-')
 plt.show()
+test(TestX, NN)
